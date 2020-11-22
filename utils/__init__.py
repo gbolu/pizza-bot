@@ -15,8 +15,11 @@ class Order():
     def addToCart(self, item):
         self.cart.append(item)
 
+    def addLocation(self, location):
+        self.orderLocation = location
+
     def removeFromCart(self, item):
-        self.cart.remove(item);
+        self.cart.remove(item)
 
     def completeOrder(self):
         self.orderStatus = "complete"

@@ -1,3 +1,4 @@
-temp_bot_env
+__pycache__
+temp_env
 .vscode
 .env
