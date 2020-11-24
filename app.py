@@ -1,5 +1,6 @@
 from flask import Flask, request, session
 from dotenv import load_dotenv
+from flask.wrappers import Response
 import requests, os, googlemaps
 from twilio.twiml.messaging_response import MessagingResponse 
 from pprint import pprint
@@ -22,6 +23,7 @@ def pizza():
     msg = resp.message()
     responded = False
     if 'pizza' in incoming_msg:
+        session.clear()
         #return a pizza quote
         quote = 'Pizza party coming right up! Please enter your address to view the closest restaurants delivering pizza.'
         if 'user' not in session:
@@ -50,12 +52,15 @@ def pizza():
                     if r.status_code == 200:
                         places = [place for place in r.json()['results'] if place['opening_hours']['open_now']]
                         if places != []:
+                            msg.body("Here are your available locations: ")
+                            count = 1
                             for place in places:
                                 if place['opening_hours']['open_now']:
-                                    pprint(place["name"])
-                                    # msg.body(f'{place["name"]}')
+                                    message = f"{count} - {place['name']}"
+                                    resp.message(message)
+                                count += 1
                         else:
-                            pass
+                            msg.body("There are no open locations within 5km of you.")
 
                 else:
                     msg.body('Could not find your location. Please try again.')
