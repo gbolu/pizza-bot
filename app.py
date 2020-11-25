@@ -1,10 +1,10 @@
+import requests, os, googlemaps
+
+from uuid import uuid4
 from flask import Flask, request, session
 from dotenv import load_dotenv
-from flask.wrappers import Response
-import requests, os, googlemaps
 from twilio.twiml.messaging_response import MessagingResponse 
 from pprint import pprint
-
 from utils import Order
 
 load_dotenv()
@@ -18,16 +18,16 @@ app.secret_key = os.getenv('SECRET_KEY')
 # The main endpoint where messages arrive
 @app.route('/', methods=['POST'])
 def pizza():
-    incoming_msg = request.values.get('Body', '').lower()
+    incoming_msg = request.values.get('Body', '')
     resp = MessagingResponse()
     msg = resp.message()
     responded = False
-    if 'pizza' in incoming_msg:
+    if 'pizza' == incoming_msg:
         session.clear()
         #return a pizza quote
         quote = 'Pizza party coming right up! Please enter your address to view the closest restaurants delivering pizza.'
         if 'user' not in session:
-            session['user'] = request.values.get('From')
+            session['user'] = str(uuid4())
         msg.body(quote)
         responded = True
 
@@ -38,33 +38,52 @@ def pizza():
                 session['location'] = incoming_msg
 
                 # convert incoming location to http friendlu
-                location = str(incoming_msg).replace(' ', '+')
+                location = str(incoming_msg)
+                prepped_location = location.replace(' ', '+')
 
                 # grab coordinates of user location
-                r = requests.get(f'https://maps.googleapis.com/maps/api/geocode/json?address={location}&key={googleApiKey}')
+                r = requests.get(f'https://maps.googleapis.com/maps/api/geocode/json?address={prepped_location}&key={googleApiKey}')
                 if r.status_code == 200:
                     geo_details = r.json()['results'][0]['geometry']['location']
                     latitude = geo_details['lat']
-                    longitude = geo_details['lng']    
+                    longitude = geo_details['lng']                     
 
                     # check for available pizza places within 5km
                     r = requests.get(f'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={latitude},{longitude}&radius=5000&keyword=pizza&key={googleApiKey}')
                     if r.status_code == 200:
-                        places = [place for place in r.json()['results'] if place['opening_hours']['open_now']]
-                        if places != []:
-                            msg.body("Here are your available locations: ")
-                            count = 1
-                            for place in places:
-                                if place['opening_hours']['open_now']:
-                                    message = f"{count} - {place['name']}"
-                                    resp.message(message)
-                                count += 1
+                        results = r.json()['results']
+                        if results == []:
+                            resp.message("We're so sorry. There are no available locations close to you.")
                         else:
-                            msg.body("There are no open locations within 5km of you.")
+                            # pick top 3 pizza locations
+                            places = [place for place in results if (place['opening_hours']['open_now'] or place['business_status'] == 'OPERATIONAL') and results.index(place) < 3]
+                            if places != []:
+                                msg.body("Here are the 3 closest available locations. Please select a location using the number in front of the location: ")
+                                count = 1
+                                for place in places:
+                                    message = f"{count} - {place['name']} - {place['vicinity']}"
+                                    resp.message(message)
+                                    count += 1
+                                order = Order(id=session['user'], orderLocation=location, possible_locations=places, phone_no=None)
+                                order.store()
+                                session['places'] = True
+                            else:
+                                resp.message("There are no open locations within 5km of you.")
 
                 else:
                     msg.body('Could not find your location. Please try again.')
                 responded = True
+            else:
+                if session['places']:
+                    location_choice = int(incoming_msg)
+                    order_dict = Order.getOrder(session['user'])
+                    possible_locations = order_dict['possible_locations']
+                    order = Order.orderFromStore(order_dict=order_dict)
+                    responded = True
+                    selected_location = possible_locations[location_choice]
+                    order.orderLocation = selected_location
+                    order.store()
+
 
     if not responded:
         session.clear()
