@@ -10,6 +10,9 @@ from utils import Drink, Order, Pizza
 
 load_dotenv()
 
+with open("db.json", "w") as db:
+    db.close()
+
 app = Flask(__name__)
 googleApiKey = os.getenv('GOOGLE_API_KEY')
 # gmaps = googlemaps.Client(key=googleApiKey)
