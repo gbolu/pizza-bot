@@ -14,7 +14,8 @@ app = Flask(__name__)
 googleApiKey = os.getenv('GOOGLE_API_KEY')
 # gmaps = googlemaps.Client(key=googleApiKey)
 
-app.secret_key = os.getenv('SECRET_KEY')
+secret_key = str(uuid4())
+app.secret_key = secret_key
 
 def printMenuToUser(twilResp: MessagingResponse):
     twilResp.message("1 - Pizza")
@@ -64,6 +65,7 @@ def pizza():
 
     elif 'pizza' == incoming_msg:
         # return a pizza quote, ask for user address and create session for user
+        session.clear()
         createUser()
         msg.body('Pizza party coming right up! Please enter your address to view the closest restaurants delivering pizza.')
         responded = True
@@ -93,14 +95,15 @@ def pizza():
                     longitude = geo_details['lng']                     
 
                     # check for available pizza places within 5km
-                    r = requests.get(f'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={latitude},{longitude}&radius=5000&keyword=pizza&key={googleApiKey}')
+                    r = requests.get(f'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={latitude},{longitude}&rankby=distance&keyword=pizza&key={googleApiKey}')
                     if r.status_code == 200:
                         results = r.json()['results']
                         if results == []:
                             resp.message("We're so sorry. There are no available locations close to you.")
                         else:
                             # pick top 3 pizza locations
-                            places = [place for place in results if (place['opening_hours']['open_now'] or place['business_status'] == 'OPERATIONAL') and results.index(place) < 3]
+                            pprint(results)
+                            places = [place for place in results if ('opening_hours' in place) and (place['opening_hours']['open_now'] or place['business_status'] == 'OPERATIONAL') and results.index(place) < 3]
                             if places != []:
                                 msg.body("Here are the 3 closest available locations. Please select a location using the number in front of the location: ")
                                 count = 1
